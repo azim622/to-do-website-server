@@ -3,7 +3,7 @@ const cors = require("cors");
 const app = express();
 require("dotenv").config();
 const port = process.env.PORT || 5000;
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 app.use(cors());
 app.use(express.json());
@@ -19,56 +19,55 @@ const client = new MongoClient(uri, {
   },
 });
 
-
-
-
 async function run() {
   try {
+    const taskFlowCollection = client.db("task-management").collection("task");
 
-    const taskFlowCollection = client.db("task-management").collection("task")
-
-    app.post('/task', async (req, res) => {
-      const query = req.body;
-      const result = await taskFlowCollection.insertOne(query);
+    app.post("/task", async (req, res) => {
+      const task = req.body;
+      if (!task.email) {
+        return res.status(400).json({ success: false, message: "User email is required" });
+      }
+      const result = await taskFlowCollection.insertOne(task);
       res.send(result);
     });
 
     app.get("/tasks", async (req, res) => {
-      const tasks = await taskFlowCollection.find().toArray();
+      const { email } = req.query;
+      if (!email) {
+        return res.status(400).json({ success: false, message: "User email is required" });
+      }
+      const tasks = await taskFlowCollection.find({ email }).toArray();
       res.send(tasks);
-  });
+    });
 
-  // updated task
-  app.put("/task/:id", async (req, res) => {
-    const { id } = req.params;
-    const updatedTask = req.body;
-    const result = await taskFlowCollection.updateOne(
+    // Update task
+    app.put("/task/:id", async (req, res) => {
+      const { id } = req.params;
+      const updatedTask = req.body;
+      const result = await taskFlowCollection.updateOne(
         { _id: new ObjectId(id) },
         { $set: updatedTask }
-    );
-    res.send(result);
-});
+      );
+      res.send(result);
+    });
 
-  // Delete a task
-  const { ObjectId } = require("mongodb");
-  
-app.delete("/task/:id", async (req, res) => {
-  const id = req.params.id;
-  try {
-      const query = { _id: new ObjectId(id) };
-      const result = await taskFlowCollection.deleteOne(query);
-
-      if (result.deletedCount === 1) {
+    // Delete task
+    app.delete("/task/:id", async (req, res) => {
+      const id = req.params.id;
+      try {
+        const query = { _id: new ObjectId(id) };
+        const result = await taskFlowCollection.deleteOne(query);
+        if (result.deletedCount === 1) {
           res.send({ success: true, message: "Task deleted successfully" });
-      } else {
+        } else {
           res.status(404).send({ success: false, message: "Task not found" });
+        }
+      } catch (error) {
+        console.error("Error deleting task:", error);
+        res.status(500).send({ success: false, message: "Internal server error" });
       }
-  } catch (error) {
-      console.error("Error deleting task:", error);
-      res.status(500).send({ success: false, message: "Internal server error" });
-  }
-});
-
+    });
 
     await client.connect();
     console.log("✅ Successfully connected to MongoDB!");
